@@ -2,7 +2,26 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import type { ProgressMessage } from '../types';
 
-const WS_BASE = import.meta.env.VITE_WS_BASE ?? 'ws://localhost:8000';
+const getWsBase = (): string => {
+  if (import.meta.env.VITE_WS_BASE) {
+    return import.meta.env.VITE_WS_BASE;
+  }
+  const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api';
+  // Strip trailing /api or api
+  const base = apiBase.replace(/\/api\/?$/, '');
+  
+  if (base.startsWith('https://')) {
+    return base.replace('https://', 'wss://');
+  }
+  if (base.startsWith('http://')) {
+    return base.replace('http://', 'ws://');
+  }
+  // Fallback to window origin if relative
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+};
+
+const WS_BASE = getWsBase();
 
 interface ProgressTrackerProps {
   runId: string;
