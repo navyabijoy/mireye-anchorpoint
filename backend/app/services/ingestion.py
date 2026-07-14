@@ -30,7 +30,14 @@ ZIP_COORDINATE_CACHE = {
     "37201": (36.1627, -86.7816),  # Nashville
     "85001": (33.4484, -112.0740), # Phoenix
     "48201": (42.3314, -83.0458),  # Detroit
-    "20001": (38.8951, -77.0364)   # Washington DC
+    "75001": (32.9618, -96.8292),  # Addison
+    "76011": (32.7441, -97.0981),  # Arlington
+    "75050": (32.7486, -96.9944),  # Grand Prairie
+    "75247": (32.8080, -96.8850),  # Brookhollow
+    "77002": (29.7568, -95.3656),  # Houston Downtown
+    "77092": (29.8248, -95.4764),  # NW Houston
+    "77020": (29.7744, -95.3128),  # NE Houston
+    "77055": (29.7941, -95.5034)   # Spring Branch
 }
 
 async def geocode_zip_census(zip_code: str) -> Optional[Tuple[float, float]]:
