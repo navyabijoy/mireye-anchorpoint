@@ -36,14 +36,14 @@ graph TD
 
 ### Phase 1: Demand Ingestion
 *   The user uploads an order CSV containing customer locations (ZIP codes or raw coordinates), order quantities, and revenue.
-*   [ingestion.py](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/ingestion.py) parses the data. If raw coordinates are missing, it queries the free **US Census Geocoding API** to translate ZIP codes into latitude and longitude coordinates.
+*   ingestion.py parses the data. If raw coordinates are missing, it queries the free **US Census Geocoding API** to translate ZIP codes into latitude and longitude coordinates.
 *   It calculates a weighted demand metric: $\text{weight} = \text{order\_count} + \frac{\text{revenue}}{\$50}$.
 
 ### Phase 2: Demand Clustering (Centers of Gravity)
 *   [demand.py](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/demand.py) runs weighted **K-Means clustering** on customer coordinates to isolate $k$ optimal regional hubs. 
 
 ### Phase 3: Candidate Sourcing
-*   [sourcing.py](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/sourcing.py) queries geographic points in radial buffer zones surrounding the calculated cluster hubs to identify raw candidate coordinates.
+*   [sourcing.py]   queries geographic points in radial buffer zones surrounding the calculated cluster hubs to identify raw candidate coordinates.
 
 ### Phase 4: Mireye Site Attribute Enrichment
 *   For each candidate coordinate, the [MireyeClient](file:///Users/mac/Documents/Projects/anchor-point/backend/app/mireye.py#L91) calls the `/v1/fetch` endpoint.
