@@ -10,6 +10,10 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   TriangleAlert,
+  Menu,
+  X,
+  List,
+  Map as MapIcon,
 } from 'lucide-react';
 
 import type { Run, CandidateRegion, CandidateSite, SiteCitations } from './types';
@@ -52,6 +56,9 @@ export default function App() {
   const [hubCount, setHubCount] = useState(2);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
+
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'map' | 'list'>('map');
 
   const [weights, setWeights] = useState({
     transport: 0.2,
@@ -226,8 +233,12 @@ export default function App() {
   const isScoring = scoringTriggered || activeRun?.status === 'processing_scoring';
 
   return (
-    <div className="app-shell">
-      {/* ── Error Banner ──────────────────────────────── */}
+    <>
+      {leftPanelOpen && (
+        <div className="drawer-backdrop print-hide" onClick={() => setLeftPanelOpen(false)} />
+      )}
+      <div className="app-shell">
+        {/* ── Error Banner ──────────────────────────────── */}
       {errorMessage && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
@@ -261,13 +272,18 @@ export default function App() {
       </nav>
 
       {/* ── Left Panel ────────────────────────────── */}
-      <aside className="left-panel print-hide">
+      <aside className={`left-panel print-hide ${leftPanelOpen ? 'open' : ''}`}>
         {/* Header */}
         <div className="panel-header">
           <span className="panel-title">Anchorpoint</span>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
-            <MoreHorizontal size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button className="mobile-close-btn print-hide" onClick={() => setLeftPanelOpen(false)}>
+              <X size={18} />
+            </button>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Tab Bar */}
@@ -415,6 +431,9 @@ export default function App() {
         {/* Top Bar */}
         <div className="top-bar">
           <div className="breadcrumb">
+            <button className="menu-btn print-hide" onClick={() => setLeftPanelOpen(true)}>
+              <Menu size={18} />
+            </button>
             <span>Analysis</span>
             {activeRun && (
               <>
@@ -461,7 +480,7 @@ export default function App() {
         </div>
 
         {/* Content Grid */}
-        <div className="content-grid">
+        <div className={`content-grid mobile-view-${mobileView}`}>
           {/* Map */}
           <div className="map-wrapper print-hide">
             {/* Progress tracker floats above map */}
@@ -629,7 +648,18 @@ export default function App() {
             </div>
           </aside>
         </div>
+
+        {/* ── Mobile View Toggle ── */}
+        <div className="mobile-view-toggle print-hide">
+          <button className={`mvt-btn ${mobileView === 'map' ? 'active' : ''}`} onClick={() => setMobileView('map')}>
+            <MapIcon size={16} /> Map
+          </button>
+          <button className={`mvt-btn ${mobileView === 'list' ? 'active' : ''}`} onClick={() => setMobileView('list')}>
+            <List size={16} /> Candidates
+          </button>
+        </div>
       </main>
     </div>
+    </>
   );
 }

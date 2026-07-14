@@ -653,19 +653,110 @@ body {
   box-shadow: 0 4px 12px rgba(0,0,0,.08) !important;
 }
 
+/* ─── Mobile UI Elements (hidden on desktop) ──────── */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+  display: none;
+}
+
+.menu-btn, .mobile-close-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px;
+}
+
+.mobile-view-toggle {
+  display: none;
+  height: 56px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 8px 16px;
+  gap: 12px;
+}
+
+.mvt-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.mvt-btn:hover {
+  background: var(--surface-3);
+}
+
+.mvt-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
 /* ─── Responsive ──────────────────────────────────── */
 @media (max-width: 960px) {
   :root { --panel-width: 300px; }
 }
 
 @media (max-width: 800px) {
+  .nav-rail { display: none; }
+  .menu-btn, .mobile-close-btn { display: flex; }
+  .mobile-view-toggle { display: flex; }
+  
+  /* Left Panel as Drawer */
+  .left-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1001;
+    width: var(--panel-width);
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+  }
+  .left-panel.open {
+    transform: translateX(0);
+  }
+  .drawer-backdrop {
+    display: block;
+  }
+
+  /* Right Panel / Map View Toggle */
   .right-panel { display: none; }
+  
+  .mobile-view-map .right-panel {
+    display: none;
+  }
+  
+  .mobile-view-list .map-wrapper {
+    display: none;
+  }
+  .mobile-view-list .right-panel {
+    display: flex;
+    width: 100%;
+    border-left: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .left-panel { position: absolute; left: var(--nav-width); top: 0; bottom: 0; z-index: 20; box-shadow: 4px 0 16px rgba(0,0,0,.12); }
-  .nav-rail { display: none; }
+  :root { --panel-width: 280px; }
 }
+
 
 /* ─── Print & PDF Export ──────────────────────────── */
 @media print {
