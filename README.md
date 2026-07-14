@@ -1,92 +1,119 @@
-# Anchor Point: Warehouse Network Siting Tool
+# Anchorpoint
 
-Anchor Point is an end-to-end web application that optimizes supply chain warehouse placement. It allows users to upload customer demand data, cluster demand hotspots, and score potential warehouse locations on multiple physical, utility, and environmental dimensions using the **Mireye Earth API**.
+**Warehouse network siting tool for mid-market D2C brands, built on the [Mireye Earth API](https://docs.mireye.ai).**
 
----
+Anchorpoint turns a brand's historical order data into a ranked, cited shortlist of warehouse sites — scored on real transport, utility, buildability, and hazard data, with every value traced back to its federal source.
 
-## 1. The Core Concept & Problem Solved
-
-### The Problem
-When companies scale their logistics networks, choosing where to build physical fulfillment centers is slow and expensive:
-1. **Consultant Bottlenecks:** Companies hire GIS analysts to manually compile zoning, environmental hazard, utility, and transport maps from disparate government databases (FEMA, USGS, EPA, and local counties).
-2. **Disconnected Data:** Standard mapping tools (like Google Maps) offer routing details but lack physical land characteristics (e.g., parcel area, electrical line proximity, grading difficulty, and flood risk).
-3. **Static Decisions:** Logistics teams cannot dynamically simulate how changes in utility prioritization (e.g., prioritizing power voltage over proximity to highways) alter the optimal warehouse locations.
-
-### The Solution: Anchor Point
-Anchor Point provides an automated, self-serve dashboard where logistics managers can:
-*   **Ingest Historical Demand:** Upload CSVs of customer shipping orders.
-*   **Locate Gravity Centers:** Compute geographical demand centers using K-Means clustering.
-*   **Score Candidate Sites:** Query the **Mireye API** for parcel, utility, hazard, and accessibility features around those centers.
-*   **Rank by Business Priorities:** Adjust weighting sliders (e.g., prioritizing electrical grid access for cold storage vs. prioritizing highway access for rapid delivery) to find the best candidate site.
+`Python` · `FastAPI` · `React` · `TypeScript` · `Tailwind CSS` · `Leaflet.js` · `WebSockets`
 
 ---
 
-## 2. Technical Pipeline Architecture
+## Table of contents
 
-The application is split into a **FastAPI backend** and a **React/TypeScript/Vite frontend**, executing the siting pipeline across five distinct phases:
+- [The problem](#the-problem)
+- [The solution](#the-solution)
+- [Pipeline architecture](#pipeline-architecture)
+- [Why Mireye](#why-mireye)
+- [Where the data excels, and where it falls short](#where-the-data-excels-and-where-it-falls-short)
+- [Getting started](#getting-started)
+
+---
+
+## The problem
+
+Choosing where to build a fulfillment center is slow and expensive at exactly the company size that can least afford either:
+
+- **Consultant bottlenecks.** Compiling zoning, hazard, utility, and transport data from disparate government sources (FEMA, USGS, EPA, county assessors) normally requires a GIS analyst or a consulting engagement — priced and staffed for enterprise, not a 40-person logistics team.
+- **Disconnected data.** Standard mapping tools give routing directions but nothing about the physical characteristics of land itself — parcel size, electrical proximity, grading difficulty, flood exposure.
+- **Static decisions.** Without a live pipeline, teams can't ask "what if we weighted power access higher than highway access?" and see the answer — every re-analysis is another manual round-trip.
+
+## The solution
+
+Anchorpoint is a self-serve dashboard where a logistics team can:
+
+- **Ingest historical demand** — upload a CSV of customer shipping orders.
+- **Locate demand centers** — cluster order geography into candidate regions.
+- **Score candidate sites** — query Mireye for parcel, utility, hazard, and accessibility data around each region.
+- **Rank by business priorities** — adjust weighting sliders (e.g. electrical grid access for cold storage vs. highway access for rapid delivery) and watch the ranking update live.
+
+## Pipeline architecture
 
 ```mermaid
 graph TD
-    A[1. CSV Upload: Order History] --> B[2. Demand Clustering: K-Means]
-    B --> C[3. Candidate Sourcing: Region Generation]
-    C --> D[4. Mireye API: Feature Fetching]
-    D --> E[5. Dynamic Siting Score: Weighted Multi-Criteria Ranking]
-    E --> F[6. Live Dashboard: Map & Breakdown Details]
+    A[1. CSV upload: order history] --> B[2. Demand clustering: weighted K-Means]
+    B --> C[3. Candidate sourcing: region generation]
+    C --> D[4. Mireye API: feature fetching]
+    D --> E[5. Siting score: weighted multi-criteria ranking]
+    E --> F[6. Live dashboard: map + score breakdown]
 ```
 
-### Phase 1: Demand Ingestion
-*   The user uploads an order CSV containing customer locations (ZIP codes or raw coordinates), order quantities, and revenue.
-*   ingestion.py parses the data. If raw coordinates are missing, it queries the free **US Census Geocoding API** to translate ZIP codes into latitude and longitude coordinates.
-*   It calculates a weighted demand metric: $\text{weight} = \text{order\_count} + \frac{\text{revenue}}{\$50}$.
+### 1 · Demand ingestion
+The user uploads an order CSV (customer location as ZIP or raw coordinates, order count, revenue). Rows without coordinates are geocoded via the free US Census Geocoding API. Each order is converted to a weighted demand point:
 
-### Phase 2: Demand Clustering (Centers of Gravity)
-*   [demand.py](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/demand.py) runs weighted **K-Means clustering** on customer coordinates to isolate $k$ optimal regional hubs. 
+```
+weight = order_count + (revenue / 50)
+```
 
-### Phase 3: Candidate Sourcing
-*   [sourcing.py]   queries geographic points in radial buffer zones surrounding the calculated cluster hubs to identify raw candidate coordinates.
+### 2 · Demand clustering
+Weighted K-Means over the demand points isolates `k` candidate regional hubs — pure clustering math, no Mireye dependency.
 
-### Phase 4: Mireye Site Attribute Enrichment
-*   For each candidate coordinate, the [MireyeClient](file:///Users/mac/Documents/Projects/anchor-point/backend/app/mireye.py#L91) calls the `/v1/fetch` endpoint.
-*   It retrieves land features across 5 main dimensions:
-    1.  **Transport:** Distance to highway, roads count, distance to railway.
-    2.  **Power:** Distance to power transmission lines, substation proximity, line voltage (kV).
-    3.  **Buildability:** Land parcel area ($m^2$), zoning rules, proxy developable acreage, terrain grading difficulty.
-    4.  **Context:** Housing units density, distance to nearest urban center.
-    5.  **Hazard:** Wildfire annual frequency, floodplains, seismic acceleration, wind speeds.
+### 3 · Candidate sourcing
+For each candidate region, generates raw candidate coordinates within a radial buffer around the centroid. (Mireye is not a parcel-search service, so a production version of this step would source real available parcels from a commercial real estate feed or county assessor data — see [limitations](#where-the-data-excels-and-where-it-falls-short) below.)
 
-### Phase 5: Multi-Criteria Decision Analysis (MCDA) Scoring
-*   The [ScoringService](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/scoring.py#L314) and [ScoringRankingEngine](file:///Users/mac/Documents/Projects/anchor-point/backend/app/services/ranking.py) compile these metrics.
-*   Metrics are normalized between $0.0$ and $1.0$.
-*   The engine applies user-customized weight vectors (passed from frontend sliders) to compile a final site composite score:
-    $$\text{Final Score} = \sum (\text{Dimension Weight} \times \text{Dimension Score})$$
+### 4 · Mireye site attribute enrichment
+For each candidate coordinate, calls Mireye's `POST /v1/fetch` across five dimensions:
 
----
+| Dimension | Fields |
+|---|---|
+| **Transport** | Distance to nearest major road, roads within 500m, distance to nearest rail line |
+| **Power** | Distance to nearest transmission line, substation proximity, line voltage (kV) |
+| **Buildability** | Parcel area (m²), zoning classification, developable acreage proxy, grading difficulty |
+| **Context** | Housing unit density, distance to nearest urban center |
+| **Hazard** | Wildfire annual frequency, floodplain intersection, seismic PGA, design wind speed |
 
-## 3. Why Mireye?
+### 5 · Multi-criteria scoring
+Each metric is normalized to `[0.0, 1.0]`. User-adjustable weight vectors (from frontend sliders) combine into a composite score per site:
 
-Mireye is the core enabler of this application because it solves three main issues with traditional geographic analysis:
+```
+final_score = Σ (dimension_weight × dimension_score)
+```
 
-1.  **Single API for Disparate Layers:** Retrieving electrical grid data, zoning codes, and seismic risks normally requires calling separate state/county portals. Mireye consolidates 170+ fields across 7 physical layers into a single REST schema.
-2.  **Data Provenance (Provenance-Tagged):** Large logistics decisions require high auditability. Every value returned by Mireye is tagged with its original database source (e.g., FEMA, USGS, National Land Cover Database), which Anchor Point displays to the user in a [CitationDrillDown](file:///Users/mac/Documents/Projects/anchor-point/frontend/src/components/CitationDrillDown.tsx) component.
-3.  **Developer Friendly (MCP & REST):** Instead of parsing heavy GeoJSON/Shapefiles, developers can query point-level attributes using simple latitude and longitude inputs.
+Fields missing from a Mireye response (surfaced in its `partial_failures` array) are excluded from that site's score — never defaulted to zero or treated as risk-negative. Sites falling below a data-completeness floor are flagged "insufficient data to rank" rather than assigned a misleadingly confident score.
 
----
+## Why Mireye
 
-## 4. Critique: Where Mireye Excels & Where It Falls Short
+1. **One API instead of a dozen government portals.** Retrieving electrical grid data, zoning codes, and seismic risk normally means separate calls to separate state/county/federal systems. Mireye consolidates this into a single REST schema across terrain, land cover, built environment, utilities, parcels, climate, and hazard layers.
+2. **Provenance-tagged, not just returned.** Every value carries its source (FEMA, USGS, NLCD, etc.), a source URL, a fetch timestamp, and a confidence bucket — auditability that matters for a $1–2M facility decision. Anchorpoint surfaces this directly to the user via a citation drill-down on every scored site.
+3. **Point-level queries, no shapefile parsing.** Coordinates in, structured JSON out — no GeoJSON/shapefile handling required to get parcel- and point-level attributes.
 
-As part of our assessment, we evaluated where the Mireye data works beautifully and where it presents limitations for real-world supply chain decisions:
+## Where the data excels, and where it falls short
 
-### Where Mireye Excels
-*   **Utility & Infrastructure Accuracy:** The proximity/attributes of transmission lines and substations are incredibly accurate and normally very difficult to find without specialized utility maps.
-*   **Speed:** Fetching multiple geospatial vectors for coordinates completes in milliseconds, enabling rapid iteration of siting simulations.
+### Excels
+- **Utility/infrastructure accuracy.** Transmission line and substation proximity data is detailed and otherwise hard to source outside specialized utility maps.
+- **Speed.** Fetching many geospatial attributes per coordinate completes fast enough to support rapid, iterative siting simulations rather than a single static report.
 
-### Where Mireye is Currently Lacking
-1.  **Euclidean Distance vs. Real Road Networks:** 
-    *   *The Issue:* Mireye returns straight-line distance (`nearest_major_road_distance_m`). In supply chains, physical distance is secondary to **drive-time travel distance** and road accessibility (e.g., a highway might be 100 meters away, but the nearest ramp access is 5 miles away).
-    *   *The Fix:* Mireye could integrate routing distances or topology metrics directly, or users must pair Mireye with routing engines (like OSRM or Valhalla).
-2.  **Zoning Uniformity:**
-    *   *The Issue:* The `parcel_zoning` field returns local county zoning codes (e.g., `M-1`, `IG`). Because every municipality uses unique codes, a developer cannot programmatically check if "Light Industrial Fulfillment" is allowed without manual reference tables.
-    *   *The Fix:* Mireye could provide standardized zoning categories (e.g., Commercial, Industrial, Agricultural, Residential) alongside the raw local code.
-3.  **Static Annual Risks vs. Long-Term Climate Projections:**
-    *   *The Issue:* Wildfire and flood frequencies (`wildfire_annual_frequency`) represent historical averages. Because fulfillment centers are 15-to-30-year capital investments, logistics teams need predictive climate models (e.g., risk levels projected out to 2040 and 2050).
-    *   *The Fix:* Introduce historical trend slopes or forward-looking projection classes under the hazard category.
+### Falls short
+
+| Limitation | Why it matters here | Possible fix |
+|---|---|---|
+| **Straight-line, not drive-time, distance.** `nearest_major_road_distance_m` is Euclidean, not routed. A highway can be 100m away with the nearest on-ramp five miles off. | Supply-chain siting cares about actual travel time and accessibility, not radius. | Pair Mireye with a routing engine (OSRM, Valhalla) for a true drive-time layer, or a future Mireye field exposing routed/isochrone distance. |
+| **Non-standardized zoning codes.** `parcel_zoning` returns raw local codes (`M-1`, `IG`, etc.), which vary by municipality with no shared taxonomy. | Can't programmatically check "is fulfillment-center use allowed here" without a manual per-county reference table. | A standardized zoning category field (Commercial / Industrial / Agricultural / Residential) alongside the raw local code. |
+| **Historical averages, not forward-looking risk.** `wildfire_annual_frequency` and similar hazard fields are historical averages, not climate projections. | A fulfillment center is a 15–30 year capital investment; historical frequency may understate future risk. | Forward-looking projection classes (e.g. risk under 2040/2050 climate scenarios) alongside the historical baseline. |
+| **Not a parcel-search service.** Mireye answers questions about a coordinate you already have — it doesn't supply a list of available industrial parcels. | Candidate site generation currently uses a synthetic radial-buffer approach, not real listings. | Integrate a commercial real estate feed (CoStar, LoopNet, Crexi) or county assessor parcel data as a separate, decoupled sourcing layer. |
+
+## Getting started
+
+```bash
+# Backend
+cd backend
+pip install -r requirements.txt
+export MIREYE_API_TOKEN="<your token from mireye.com account settings>"
+uvicorn app.main:app --reload
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+```
+
+A valid `MIREYE_API_TOKEN` is required at startup — there is no offline/mock mode, since the point of this project is to demonstrate real, working calls against live federal-sourced data.
