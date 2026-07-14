@@ -2,11 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Upload,
   MapPin,
-  LayoutGrid,
-  Package,
   FileText,
-  Settings,
-  LogOut,
   ChevronRight,
   Loader2,
   ShieldAlert,
@@ -51,7 +47,7 @@ export default function App() {
   const [scoringTriggered, setScoringTriggered] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'new' | 'history'>('history');
+  const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
   const [runName, setRunName] = useState('Siting Run ' + new Date().toLocaleDateString());
   const [hubCount, setHubCount] = useState(2);
   const [csvFile, setCsvFile] = useState<File | null>(null);
