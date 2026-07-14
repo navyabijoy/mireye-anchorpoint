@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Sparkles, HelpCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ShieldAlert, Sparkles, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import type { CandidateSite, SiteCitations, CitationDetail } from '../types';
 
 interface CitationDrillDownProps {
