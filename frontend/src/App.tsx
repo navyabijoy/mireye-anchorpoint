@@ -83,17 +83,13 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setRuns(data);
-        if (data.length > 0) {
-          setActiveRun((currentActive) => {
-            if (!currentActive) {
-              handleSelectRun(data[0]);
-            } else {
-              const freshActive = data.find((r: Run) => r.id === currentActive.id);
-              if (freshActive) setActiveRun(freshActive);
-            }
-            return currentActive;
-          });
-        }
+        setActiveRun((currentActive) => {
+          if (currentActive) {
+            const freshActive = data.find((r: Run) => r.id === currentActive.id);
+            return freshActive || currentActive;
+          }
+          return currentActive;
+        });
       }
     } catch (e) {
       console.error('Failed to fetch runs:', e);
