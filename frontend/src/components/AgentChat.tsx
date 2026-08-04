@@ -37,6 +37,7 @@ export function AgentChat({ runId, onClose }: AgentChatProps) {
     const agentMsg: AgentMessage = { id: (Date.now() + 1).toString(), role: 'agent', content: '', isStreaming: true, steps: [] };
     
     setMessages(prev => [...prev, userMsg, agentMsg]);
+    setInput('');
     setIsLoading(true);
 
     try {
