@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,10 +12,11 @@ from app.database import engine, Base, get_db, async_session_maker, set_wal_mode
 from app.config import settings
 from app import crud, schemas, models
 from app.services.ingestion import IngestionService
-from app.services.demand import DemandModelingService
+from app.services.demand import DemandModelingService, DemandSurgeDetector
 from app.services.sourcing import CandidateSourcingService
 from app.services.scoring import ScoringService
 from app.services.ranking import ScoringRankingEngine
+from app.services.agent import AnchorpointAgent
 from app.mireye import MireyeClient, MIREYE_FIELDS, FIELD_DIMENSIONS
 
 logging.basicConfig(level=logging.INFO)
@@ -246,6 +248,53 @@ async def get_run_endpoint(id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return run
 
 
+@app.get("/api/runs/{id}/surge-report")
+async def get_surge_report_endpoint(id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Computes a demand surge report on the fly by comparing this run's demand points
+    against the most recent prior run (if any).
+    """
+    run = await crud.get_run(db, id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+        
+    current_points = await crud.get_run_demand_points(db, id)
+    current_dicts = [{"lat": p.lat, "lng": p.lng, "zip_code": p.zip_code, "order_count": p.order_count, "weight": p.weight} for p in current_points]
+    
+    # Find the most recent run before this one
+    previous_runs = await db.execute(
+        select(models.Run)
+        .where(models.Run.created_at < run.created_at)
+        .order_by(models.Run.created_at.desc())
+        .limit(1)
+    )
+    prev_run = previous_runs.scalar_one_or_none()
+    
+    surging_zips = []
+    if prev_run:
+        prev_points = await crud.get_run_demand_points(db, prev_run.id)
+        prev_dicts = [{"lat": p.lat, "lng": p.lng, "zip_code": p.zip_code, "order_count": p.order_count, "weight": p.weight} for p in prev_points]
+        surging_zips = DemandSurgeDetector.compare_demand_snapshots(prev_dicts, current_dicts)
+        
+    internal_skew = DemandSurgeDetector.estimate_internal_surge_score(current_dicts)
+    
+    # Recommend delta hub count based on number of surging zips or high skew
+    recommended_delta = 0
+    if len(surging_zips) >= 3:
+        recommended_delta = 1
+    elif internal_skew > 0.7:
+        recommended_delta = 1
+        
+    return {
+        "run_id": id,
+        "previous_run_id": prev_run.id if prev_run else None,
+        "internal_skew_score": internal_skew,
+        "surging_zips": surging_zips,
+        "recommended_delta_hubs": recommended_delta
+    }
+
+
+
 @app.post("/api/runs/{id}/score")
 async def trigger_scoring_endpoint(
     id: uuid.UUID,
@@ -307,6 +356,30 @@ async def list_sites_endpoint(
         ))
 
     return response
+
+
+from pydantic import BaseModel
+class AgentMessageRequest(BaseModel):
+    message: str
+    history: Optional[List[Dict[str, str]]] = None
+
+@app.post("/api/runs/{id}/agent/stream")
+async def agent_stream_endpoint(
+    id: str,
+    request: AgentMessageRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Streams reasoning steps and final response from the agent.
+    """
+    agent = AnchorpointAgent(db, id)
+    
+    async def event_generator():
+        async for chunk in agent.run_pipeline(request.message, history=request.history):
+            yield f"data: {chunk}\n\n"
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 
 @app.get("/api/sites/{id}/citations", response_model=schemas.SiteCitationsResponse)

@@ -71,3 +71,36 @@ export interface ProgressMessage {
   progress?: number;
   message: string;
 }
+
+export interface SurgeZip {
+  zip_code: string;
+  old_weight: number;
+  new_weight: number;
+  growth_factor: number;
+  centroid_lat: number;
+  centroid_lng: number;
+}
+
+export interface SurgeReport {
+  run_id: string;
+  previous_run_id: string | null;
+  internal_skew_score: number;
+  surging_zips: SurgeZip[];
+  recommended_delta_hubs: number;
+}
+
+export interface AgentMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  isStreaming?: boolean;
+  steps?: AgentStep[];
+}
+
+export interface AgentStep {
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'answer' | 'answer_chunk';
+  content?: string;
+  tool_name?: string;
+  args?: any;
+  result?: any;
+}

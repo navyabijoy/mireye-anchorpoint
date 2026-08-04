@@ -14,13 +14,15 @@ import {
   X,
   List,
   Map as MapIcon,
+  Bot,
 } from 'lucide-react';
 
-import type { Run, CandidateRegion, CandidateSite, SiteCitations } from './types';
+import type { Run, CandidateRegion, CandidateSite, SiteCitations, SurgeReport } from './types';
 import { Map } from './components/Map';
 import { ScoreBreakdown } from './components/ScoreBreakdown';
 import { CitationDrillDown } from './components/CitationDrillDown';
 import { ProgressTracker } from './components/ProgressTracker';
+import { AgentChat } from './components/AgentChat';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api';
 
@@ -43,6 +45,7 @@ export default function App() {
   const [sites, setSites] = useState<CandidateSite[]>([]);
   const [selectedSite, setSelectedSite] = useState<CandidateSite | null>(null);
   const [citations, setCitations] = useState<SiteCitations | null>(null);
+  const [surgeReport, setSurgeReport] = useState<SurgeReport | null>(null);
 
   const [runsLoading, setRunsLoading] = useState(true);
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -58,6 +61,7 @@ export default function App() {
   const [dragActive, setDragActive] = useState(false);
 
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'map' | 'list'>('map');
 
   const [weights, setWeights] = useState({
@@ -103,9 +107,11 @@ export default function App() {
   useEffect(() => {
     if (activeRun && activeRegion) {
       fetchRegionSites(activeRun.id, activeRegion.id);
+      fetchSurgeReport(activeRun.id);
     } else {
       setSites([]);
       setSelectedSite(null);
+      setSurgeReport(null);
     }
   }, [activeRun, activeRegion]);
 
@@ -132,6 +138,15 @@ export default function App() {
       console.error('Failed to fetch sites:', e);
     } finally {
       setSitesLoading(false);
+    }
+  };
+
+  const fetchSurgeReport = async (runId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/runs/${runId}/surge-report`);
+      if (res.ok) setSurgeReport(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch surge report:', e);
     }
   };
 
@@ -263,6 +278,14 @@ export default function App() {
             style={{ cursor: 'pointer' }}
           >
             <FileText size={18} />
+          </button>
+          <button
+            className={`nav-item ${agentPanelOpen ? 'active' : ''}`}
+            title="Ask AI Agent"
+            onClick={() => setAgentPanelOpen(p => !p)}
+            style={{ cursor: 'pointer', marginTop: 16 }}
+          >
+            <Bot size={18} />
           </button>
         </div>
       </nav>
@@ -542,6 +565,10 @@ export default function App() {
                 </div>
               </div>
             )}
+            
+            {agentPanelOpen && activeRun && (
+              <AgentChat runId={activeRun.id} onClose={() => setAgentPanelOpen(false)} />
+            )}
           </div>
 
           {/* Right Panel */}
@@ -559,6 +586,34 @@ export default function App() {
 
             {/* Single scrollable body for everything below header */}
             <div className="right-panel-scrollable" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+              
+              {/* Surge Report Banner */}
+              {surgeReport && (surgeReport.surging_zips.length > 0 || surgeReport.internal_skew_score > 0.7) && (
+                <div className="surge-banner">
+                  <div className="surge-header">
+                    <TriangleAlert size={16} /> <span>Demand Surge Detected</span>
+                  </div>
+                  <div className="surge-body">
+                    {surgeReport.surging_zips.length > 0 ? (
+                      <>
+                        <p style={{marginBottom: 8}}>Significant growth compared to previous run:</p>
+                        {surgeReport.surging_zips.slice(0, 3).map(z => (
+                          <div key={z.zip_code} className="surge-zip-row">
+                            <span>ZIP {z.zip_code}</span>
+                            <span className="pill pill-amber" style={{fontWeight: 700}}>{z.growth_factor.toFixed(1)}×</span>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p>High internal demand skew score ({surgeReport.internal_skew_score.toFixed(2)}). One cluster dominates the data.</p>
+                    )}
+                    {surgeReport.recommended_delta_hubs > 0 && (
+                      <p className="surge-recommendation">Consider increasing hubs by {surgeReport.recommended_delta_hubs}.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Sites list */}
               <div style={{ padding: '10px 12px 4px' }}>
                 {sitesLoading ? (

@@ -118,6 +118,13 @@ async def get_run_regions(db: AsyncSession, run_id: uuid.UUID) -> List[models.Ca
     return list(result.scalars().all())
 
 
+async def get_run_demand_points(db: AsyncSession, run_id: uuid.UUID) -> List[models.DemandPoint]:
+    result = await db.execute(
+        select(models.DemandPoint).where(models.DemandPoint.run_id == run_id)
+    )
+    return list(result.scalars().all())
+
+
 async def get_region_sites(db: AsyncSession, region_id: uuid.UUID) -> List[models.CandidateSite]:
     result = await db.execute(
         select(models.CandidateSite)

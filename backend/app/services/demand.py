@@ -195,3 +195,63 @@ class DemandModelingService:
             })
             
         return regions
+
+class DemandSurgeDetector:
+    @staticmethod
+    def compare_demand_snapshots(old_points: List[Dict[str, Any]], new_points: List[Dict[str, Any]], growth_threshold: float = 3.0) -> List[Dict[str, Any]]:
+        """
+        Compares two demand snapshots and returns ZIPs that have grown by at least growth_threshold.
+        """
+        old_map = {p.get("zip_code"): p for p in old_points if p.get("zip_code")}
+        surging_zips = []
+        
+        for p in new_points:
+            zip_code = p.get("zip_code")
+            if not zip_code:
+                continue
+                
+            old_p = old_map.get(zip_code)
+            if old_p:
+                old_count = old_p.get("order_count", 0)
+                new_count = p.get("order_count", 0)
+                
+                # To prevent division by zero or inflating tiny baseline (e.g. 1 to 4)
+                if old_count > 0:
+                    growth_factor = new_count / old_count
+                    if growth_factor >= growth_threshold and new_count - old_count >= 10:
+                        surging_zips.append({
+                            "zip_code": zip_code,
+                            "old_weight": old_count,
+                            "new_weight": new_count,
+                            "growth_factor": growth_factor,
+                            "centroid_lat": p.get("lat"),
+                            "centroid_lng": p.get("lng")
+                        })
+        
+        return sorted(surging_zips, key=lambda x: x["growth_factor"], reverse=True)
+
+    @staticmethod
+    def estimate_internal_surge_score(demand_points: List[Dict[str, Any]]) -> float:
+        """
+        Estimates an internal surge score based on weight distribution skew (Gini coefficient).
+        """
+        if not demand_points:
+            return 0.0
+            
+        weights = sorted([p.get("weight", 0) for p in demand_points])
+        n = len(weights)
+        if n == 0:
+            return 0.0
+            
+        total_weight = sum(weights)
+        if total_weight == 0:
+            return 0.0
+            
+        cumulative_weight = 0
+        gini_sum = 0
+        for i, w in enumerate(weights):
+            cumulative_weight += w
+            gini_sum += (n - i) * w
+            
+        gini = (n + 1 - 2 * (gini_sum / total_weight)) / n
+        return max(0.0, gini)
